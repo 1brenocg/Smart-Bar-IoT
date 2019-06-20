@@ -13,6 +13,13 @@
 #include <BlynkSimpleEsp8266.h>
 #include <Ultrasonic.h>
 
+#ifdef ESP8266
+#include <ESP8266WiFi.h>
+#elif ESP32
+#include <WiFi.h>
+#endif
+#include "ESPNowW.h"
+
 #define TRIG_PIN D5
 #define ECHO_PIN D6
 #define DHTPIN D7 // Digital pin connected to the DHT sensor
@@ -51,9 +58,21 @@ char pass[] = "12345678";
 
 int contPessoas = 0;
 
+uint8_t receiver_mac[] = {0x36, 0x33, 0x33, 0x33, 0x33, 0x33};
+
 void setup()
 {
   Serial.begin(9600);
+  
+  #ifdef ESP8266
+    WiFi.mode(WIFI_STA); // MUST NOT BE WIFI_MODE_NULL
+  #elif ESP32
+    WiFi.mode(WIFI_MODE_STA);
+  #endif
+    WiFi.disconnect();
+    ESPNow.init();
+    ESPNow.add_peer(receiver_mac);
+  
   // Initialize device.
   startTime = millis();
   dht.begin();
@@ -110,6 +129,8 @@ void setup()
 void loop(){
 
   Blynk.run();
+
+  static uint8_t buzzer = 0;
 
   // Delay between measurements.
   delay(delayMS);
@@ -169,19 +190,22 @@ void loop(){
 
   //------------------- Módulo do Sensor de Distancia --------------------------------------//
   us.measure();
-
   Serial.print("Distancia = ");
   Serial.print(us.get_cm()); //mostra no monitor serial a distancia
   // Blynk.virtualWrite(V4, us.get_cm());
   Serial.print("\nQuantidade de pessoas: ");
   Serial.println(contPessoas);  //quantidade de pessoas
-  if (us.get_cm() < 15)
-  {
+  buzzer = 0;
+  ESPNow.send_message(receiver_mac, &buzzer, 1);
+  if (us.get_cm() < 15){
     Serial.println("Uma pessoa entrou!"); //mostra no monitor serial que uma pessoa entrou
     Blynk.notify("Uma pessoa entrou!");   //notifica quando uma pessoa entra
     contPessoas = contPessoas + 1;
     Serial.println(contPessoas);         //mostra no monitor serial a quantidade de pessoas
     Blynk.virtualWrite(V1, contPessoas); //mostra a quantidade de pessoas no blynk
+
+    buzzer = 1;
+    ESPNow.send_message(receiver_mac, &buzzer, 1);
   }
    
   //------------------- Módulo do Sensor de Distancia --------------------------------------//
